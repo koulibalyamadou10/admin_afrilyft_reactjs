@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Eye, Edit, Trash2, Plus, UserCheck, UserX, Search, Filter } from 'lucide-react'
+import { Eye, Edit, Trash2, Plus, UserCheck, UserX, Search, Filter, Shield, ShieldCheck } from 'lucide-react'
 import Table from '../components/UI/Table'
 import Modal from '../components/UI/Modal'
 import { supabase } from '../lib/supabase'
@@ -21,7 +21,8 @@ export default function Users() {
     phone: '',
     role: 'customer',
     is_active: true,
-    is_verified: false
+    is_verified: false,
+    avatar_url: ''
   })
   const [formErrors, setFormErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -50,13 +51,20 @@ export default function Users() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ is_active: !currentStatus })
+        .update({ 
+          is_active: !currentStatus,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', userId)
 
       if (error) throw error
       
       setUsers(users.map(user => 
-        user.id === userId ? { ...user, is_active: !currentStatus } : user
+        user.id === userId ? { 
+          ...user, 
+          is_active: !currentStatus,
+          updated_at: new Date().toISOString()
+        } : user
       ))
     } catch (error) {
       console.error('Error updating user status:', error)
@@ -67,13 +75,20 @@ export default function Users() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ is_verified: !currentStatus })
+        .update({ 
+          is_verified: !currentStatus,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', userId)
 
       if (error) throw error
       
       setUsers(users.map(user => 
-        user.id === userId ? { ...user, is_verified: !currentStatus } : user
+        user.id === userId ? { 
+          ...user, 
+          is_verified: !currentStatus,
+          updated_at: new Date().toISOString()
+        } : user
       ))
     } catch (error) {
       console.error('Error updating user verification:', error)
@@ -82,12 +97,20 @@ export default function Users() {
 
   const handleDelete = async (userId) => {
     try {
-      const { error } = await supabase
+      // D'abord supprimer le profil
+      const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', userId)
 
-      if (error) throw error
+      if (profileError) throw profileError
+
+      // Ensuite supprimer l'utilisateur auth (si possible)
+      try {
+        await supabase.auth.admin.deleteUser(userId)
+      } catch (authError) {
+        console.warn('Could not delete auth user:', authError)
+      }
       
       setUsers(users.filter(user => user.id !== userId))
       setShowModal(false)
@@ -126,7 +149,7 @@ export default function Users() {
     
     try {
       if (modalType === 'create') {
-        // Pour créer un utilisateur, nous devons d'abord créer un compte auth
+        // Créer d'abord l'utilisateur auth
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: formData.email,
           password: 'TempPassword123!', // Mot de passe temporaire
@@ -150,7 +173,8 @@ export default function Users() {
             phone: formData.phone,
             role: formData.role,
             is_active: formData.is_active,
-            is_verified: formData.is_verified
+            is_verified: formData.is_verified,
+            avatar_url: formData.avatar_url || null
           }])
           .select()
 
@@ -166,7 +190,9 @@ export default function Users() {
             phone: formData.phone,
             role: formData.role,
             is_active: formData.is_active,
-            is_verified: formData.is_verified
+            is_verified: formData.is_verified,
+            avatar_url: formData.avatar_url || null,
+            updated_at: new Date().toISOString()
           })
           .eq('id', selectedUser.id)
           .select()
@@ -195,7 +221,8 @@ export default function Users() {
       phone: '',
       role: 'customer',
       is_active: true,
-      is_verified: false
+      is_verified: false,
+      avatar_url: ''
     })
     setFormErrors({})
   }
@@ -214,7 +241,8 @@ export default function Users() {
       phone: user.phone || '',
       role: user.role || 'customer',
       is_active: user.is_active,
-      is_verified: user.is_verified
+      is_verified: user.is_verified,
+      avatar_url: user.avatar_url || ''
     })
     setModalType('edit')
     setShowModal(true)
@@ -236,19 +264,30 @@ export default function Users() {
 
   const columns = [
     {
-      key: 'full_name',
+      key: 'user_info',
       title: 'Utilisateur',
-      render: (value, row) => (
+      render: (_, row) => (
         <div className="flex items-center">
           <div className="h-10 w-10 flex-shrink-0">
-            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+            {row.avatar_url ? (
+              <img 
+                className="h-10 w-10 rounded-full object-cover" 
+                src={row.avatar_url} 
+                alt={row.full_name}
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextSibling.style.display = 'flex'
+                }}
+              />
+            ) : null}
+            <div className={`h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center ${row.avatar_url ? 'hidden' : ''}`}>
               <span className="text-sm font-medium text-primary-600">
-                {value?.charAt(0)?.toUpperCase() || 'U'}
+                {row.full_name?.charAt(0)?.toUpperCase() || 'U'}
               </span>
             </div>
           </div>
           <div className="ml-4">
-            <div className="text-sm font-medium text-gray-900">{value}</div>
+            <div className="text-sm font-medium text-gray-900">{row.full_name}</div>
             <div className="text-sm text-gray-500">{row.email}</div>
           </div>
         </div>
@@ -257,6 +296,9 @@ export default function Users() {
     {
       key: 'phone',
       title: 'Téléphone',
+      render: (value) => (
+        <span className="text-sm text-gray-900">{value}</span>
+      )
     },
     {
       key: 'role',
@@ -272,35 +314,35 @@ export default function Users() {
       )
     },
     {
-      key: 'is_active',
+      key: 'status',
       title: 'Statut',
-      render: (value) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          value 
-            ? 'bg-success-100 text-success-800' 
-            : 'bg-error-100 text-error-800'
-        }`}>
-          {value ? 'Actif' : 'Inactif'}
-        </span>
-      )
-    },
-    {
-      key: 'is_verified',
-      title: 'Vérifié',
-      render: (value) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          value 
-            ? 'bg-success-100 text-success-800' 
-            : 'bg-warning-100 text-warning-800'
-        }`}>
-          {value ? 'Vérifié' : 'Non vérifié'}
-        </span>
+      render: (_, row) => (
+        <div className="flex flex-col space-y-1">
+          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            row.is_active 
+              ? 'bg-success-100 text-success-800' 
+              : 'bg-error-100 text-error-800'
+          }`}>
+            {row.is_active ? 'Actif' : 'Inactif'}
+          </span>
+          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            row.is_verified 
+              ? 'bg-success-100 text-success-800' 
+              : 'bg-warning-100 text-warning-800'
+          }`}>
+            {row.is_verified ? 'Vérifié' : 'Non vérifié'}
+          </span>
+        </div>
       )
     },
     {
       key: 'created_at',
       title: 'Date d\'inscription',
-      render: (value) => format(new Date(value), 'dd MMM yyyy', { locale: fr })
+      render: (value) => (
+        <div className="text-sm text-gray-900">
+          {format(new Date(value), 'dd MMM yyyy', { locale: fr })}
+        </div>
+      )
     },
     {
       key: 'actions',
@@ -333,6 +375,13 @@ export default function Users() {
             {row.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
           </button>
           <button
+            onClick={() => handleVerificationToggle(row.id, row.is_verified)}
+            className={`${row.is_verified ? 'text-warning-600 hover:text-warning-900' : 'text-success-600 hover:text-success-900'}`}
+            title={row.is_verified ? 'Retirer la vérification' : 'Vérifier'}
+          >
+            {row.is_verified ? <Shield className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+          </button>
+          <button
             onClick={() => {
               setSelectedUser(row)
               setModalType('delete')
@@ -355,7 +404,7 @@ export default function Users() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Utilisateurs</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Gérez tous les utilisateurs de votre plateforme
+              Gérez tous les utilisateurs de votre plateforme AfriLyft
             </p>
           </div>
           <button
@@ -365,6 +414,68 @@ export default function Users() {
             <Plus className="h-4 w-4 mr-2" />
             Nouvel utilisateur
           </button>
+        </div>
+      </div>
+
+      {/* Statistiques rapides */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                <span className="text-primary-600 font-semibold text-sm">{users.length}</span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-500">Total</p>
+              <p className="text-lg font-semibold text-gray-900">Utilisateurs</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 font-semibold text-sm">
+                  {users.filter(u => u.role === 'driver').length}
+                </span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-500">Chauffeurs</p>
+              <p className="text-lg font-semibold text-gray-900">Actifs</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 font-semibold text-sm">
+                  {users.filter(u => u.is_verified).length}
+                </span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-500">Vérifiés</p>
+              <p className="text-lg font-semibold text-gray-900">Comptes</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                <span className="text-yellow-600 font-semibold text-sm">
+                  {users.filter(u => !u.is_active).length}
+                </span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-500">Inactifs</p>
+              <p className="text-lg font-semibold text-gray-900">Comptes</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -438,14 +549,43 @@ export default function Users() {
         {selectedUser && (
           <div className="space-y-6">
             <div className="flex items-center space-x-4">
-              <div className="h-16 w-16 rounded-full bg-primary-100 flex items-center justify-center">
-                <span className="text-xl font-medium text-primary-600">
-                  {selectedUser.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                </span>
+              <div className="h-16 w-16 flex-shrink-0">
+                {selectedUser.avatar_url ? (
+                  <img 
+                    className="h-16 w-16 rounded-full object-cover" 
+                    src={selectedUser.avatar_url} 
+                    alt={selectedUser.full_name}
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                      e.target.nextSibling.style.display = 'flex'
+                    }}
+                  />
+                ) : null}
+                <div className={`h-16 w-16 rounded-full bg-primary-100 flex items-center justify-center ${selectedUser.avatar_url ? 'hidden' : ''}`}>
+                  <span className="text-xl font-medium text-primary-600">
+                    {selectedUser.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                  </span>
+                </div>
               </div>
               <div>
                 <h3 className="text-lg font-medium text-gray-900">{selectedUser.full_name}</h3>
                 <p className="text-sm text-gray-500">{selectedUser.email}</p>
+                <div className="flex space-x-2 mt-2">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    selectedUser.is_active 
+                      ? 'bg-success-100 text-success-800' 
+                      : 'bg-error-100 text-error-800'
+                  }`}>
+                    {selectedUser.is_active ? 'Actif' : 'Inactif'}
+                  </span>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    selectedUser.is_verified 
+                      ? 'bg-success-100 text-success-800' 
+                      : 'bg-warning-100 text-warning-800'
+                  }`}>
+                    {selectedUser.is_verified ? 'Vérifié' : 'Non vérifié'}
+                  </span>
+                </div>
               </div>
             </div>
             
@@ -458,18 +598,6 @@ export default function Users() {
                 <label className="block text-sm font-medium text-gray-700">Rôle</label>
                 <p className="mt-1 text-sm text-gray-900">
                   {selectedUser.role === 'driver' ? 'Chauffeur' : 'Client'}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Statut</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {selectedUser.is_active ? 'Actif' : 'Inactif'}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Vérifié</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {selectedUser.is_verified ? 'Oui' : 'Non'}
                 </p>
               </div>
               <div>
@@ -586,6 +714,19 @@ export default function Users() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              URL de l'avatar (optionnel)
+            </label>
+            <input
+              type="url"
+              value={formData.avatar_url}
+              onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              placeholder="https://exemple.com/avatar.jpg"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center">
               <input
@@ -650,6 +791,29 @@ export default function Users() {
               Êtes-vous sûr de vouloir supprimer l'utilisateur <strong>{selectedUser.full_name}</strong> ? 
               Cette action est irréversible et supprimera également toutes les données associées (courses, paiements, etc.).
             </p>
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">
+                    Attention
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>Cette action supprimera définitivement :</p>
+                    <ul className="list-disc list-inside mt-1">
+                      <li>Le profil utilisateur</li>
+                      <li>L'historique des courses</li>
+                      <li>Les méthodes de paiement</li>
+                      <li>Les évaluations et commentaires</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowModal(false)}
