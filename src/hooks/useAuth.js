@@ -31,6 +31,20 @@ export function useAuth() {
     return { data, error }
   }
 
+  const signUp = async (email, password, fullName, phone) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone: phone,
+        }
+      }
+    })
+    return { data, error }
+  }
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     return { error }
@@ -40,6 +54,7 @@ export function useAuth() {
     user,
     loading,
     signIn,
+    signUp,
     signOut,
   }
 }
