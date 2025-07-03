@@ -115,7 +115,7 @@ export default function Dashboard() {
         />
         <StatsCard
           title="Revenus Total"
-          value={`${stats.totalRevenue.toLocaleString()} FCFA`}
+          value={`${stats.totalRevenue.toLocaleString()} GNF`}
           change="+15%"
           changeType="increase"
           icon={CreditCard}
@@ -144,7 +144,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis />
-              <Tooltip formatter={(value) => [`${value} FCFA`, 'Revenus']} />
+              <Tooltip formatter={(value) => [`${value} GNF`, 'Revenus']} />
               <Bar dataKey="revenue" fill="#22c55e" />
             </BarChart>
           </ResponsiveContainer>

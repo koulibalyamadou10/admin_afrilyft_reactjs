@@ -126,7 +126,7 @@ export default function Rides() {
       title: 'Montant',
       render: (value) => (
         <span className="font-medium">
-          {value ? `${value.toLocaleString()} FCFA` : 'N/A'}
+          {value ? `${value.toLocaleString()} GNF` : 'N/A'}
         </span>
       )
     },
@@ -240,7 +240,7 @@ export default function Rides() {
                 <DollarSign className="h-6 w-6 text-primary-600 mx-auto mb-2" />
                 <p className="text-sm font-medium text-gray-900">Montant</p>
                 <p className="text-lg font-semibold text-primary-600">
-                  {selectedRide.fare_amount ? `${selectedRide.fare_amount.toLocaleString()} FCFA` : 'N/A'}
+                  {selectedRide.fare_amount ? `${selectedRide.fare_amount.toLocaleString()} GNF` : 'N/A'}
                 </p>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-lg">
