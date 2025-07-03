@@ -105,12 +105,8 @@ export default function Users() {
 
       if (profileError) throw profileError
 
-      // Ensuite supprimer l'utilisateur auth (si possible)
-      try {
-        await supabase.auth.admin.deleteUser(userId)
-      } catch (authError) {
-        console.warn('Could not delete auth user:', authError)
-      }
+      // Note: We can't delete auth users from the client side
+      // This would need to be handled by an admin function as well
       
       setUsers(users.filter(user => user.id !== userId))
       setShowModal(false)
@@ -140,6 +136,30 @@ export default function Users() {
     return Object.keys(errors).length === 0
   }
 
+  const createUserViaEdgeFunction = async (userData) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      throw new Error('No active session')
+    }
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to create user')
+    }
+
+    return await response.json()
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -149,38 +169,20 @@ export default function Users() {
     
     try {
       if (modalType === 'create') {
-        // Créer d'abord l'utilisateur auth
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        // Use the edge function to create the user
+        const result = await createUserViaEdgeFunction({
           email: formData.email,
-          password: 'TempPassword123!', // Mot de passe temporaire
-          email_confirm: true,
-          user_metadata: {
-            full_name: formData.full_name,
-            phone: formData.phone,
-            role: formData.role
-          }
+          full_name: formData.full_name,
+          phone: formData.phone,
+          role: formData.role,
+          is_active: formData.is_active,
+          is_verified: formData.is_verified,
+          avatar_url: formData.avatar_url || null
         })
 
-        if (authError) throw authError
-
-        // Ensuite créer le profil
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .insert([{
-            id: authData.user.id,
-            email: formData.email,
-            full_name: formData.full_name,
-            phone: formData.phone,
-            role: formData.role,
-            is_active: formData.is_active,
-            is_verified: formData.is_verified,
-            avatar_url: formData.avatar_url || null
-          }])
-          .select()
-
-        if (profileError) throw profileError
-
-        setUsers([profileData[0], ...users])
+        if (result.success && result.user) {
+          setUsers([result.user, ...users])
+        }
       } else if (modalType === 'edit') {
         const { data, error } = await supabase
           .from('profiles')
